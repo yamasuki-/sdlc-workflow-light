@@ -20,7 +20,8 @@ Claude Code 上で動く、**軽量版**のソフトウェア開発ワークフ�
  ├─ 工程スキル phase-*（全工程が同じ型: 計画 → 作成 → レビュー → 完了判定）
  ├─ /defect … 不具合（仕様どおりに作れていない）。設計か実装からやり直し、人が TC を再確認
  ├─ /change … 変更要求（振る舞いを変える）。仕様を直して 01 を再承認し、差分でやり直し
- └─ サブエージェント analyst / tester / implementer / reviewer
+ ├─ /sdlc-security … セキュリティレビュー。工程とは別に、必要なときに随時実施（全体・差分・パス）
+ └─ サブエージェント analyst / tester / implementer / reviewer / security-reviewer
 ```
 
 | 工程 | 主な成果物 | 担当 | 完了判定（既定） |
@@ -77,6 +78,7 @@ scripts/approve 01                  # 人が端末で承認（Claude からは�
 | 結果シートの保護 | `results.md` / `results.xlsx` は Claude の Write / Edit・シェルからの書き込みを拒否。CLI の `testitems sheet / reset / import` だけが更新する |
 | /defect | 再現 → エビデンス付きの原因特定 → 02 か 03 からやり直し → 自動テスト追加 → `retest` の TC を人が再確認 → close |
 | /change | 現行確認 → SPEC/TC の差分 → 01 を再承認（変更の合意）→ 02・03 を差分でやり直し → 追加・変更した TC を人が確認 → close |
+| /sdlc-security | 工程とは別に随時実施。`project.yaml` の `security.tools`（依存脆弱性・SAST・シークレットスキャン）を実行し、security-reviewer がチェックリスト（OWASP Top 10 ほか）でレビューして `docs/security/` に報告。工程の完了判定は止めず、所見は人が選んで `/defect` で直す |
 
 ## 強制の仕組み（hooks）
 
@@ -90,6 +92,7 @@ scripts/approve 01                  # 人が端末で承認（Claude からは�
 | 適用範囲 | `~/.claude` の hooks は `project.yaml` に `workflow: sdlc` があるプロジェクトでだけ検査する |
 
 本家との違い: TDD ガード（失敗テストが無いと src を編集できない）・単体テストの凍結・タスク DAG・工程ごとの書き込み制限（ゲートの無い工程）は持ちません。
+セキュリティレビューは実装工程のゲートではなく、`/sdlc-security` で随時行います。
 
 ### 限界
 
@@ -122,8 +125,8 @@ sdlc/
   RULES.md                    全体ルール。プロジェクトの CLAUDE.md から import
   phase-flow.md               工程内共通フロー
   templates/                  成果物テンプレート（requirements / questions / spec / test-items / design / test-notes /
-                              plan / summary / review / project.yaml、rules/ の雛形）
-  checklists/                 レビューチェックリスト（01・02・03・defect・change）
+                              plan / summary / review / security-review / project.yaml、rules/ の雛形）
+  checklists/                 レビューチェックリスト（01・02・03・defect・change・security）
   bin/sdlc                    状態管理 CLI
   bin/approve                 人が実行する承認スクリプト
   bin/py                      本体を動かす Python を探して実行する（SDLC_PYTHON で指定可）
@@ -131,8 +134,8 @@ sdlc/
   lib/intake/                 取り込みの形式別アダプタ（xlsx / docx / pptx / pdf / md）
 hooks/sdlc/                   ゲート・結果シート・シェル・スキル起動のガード（入口は bash の run）
 skills/                       sdlc, sdlc-init, phase-specification, phase-design, phase-implementation,
-                              phase-acceptance, defect, change
-agents/                       analyst, tester, implementer, reviewer
+                              phase-acceptance, defect, change, sdlc-security
+agents/                       analyst, tester, implementer, reviewer, security-reviewer
 settings.json                 hooks と permissions（インストーラが追記）
 ```
 
@@ -147,6 +150,7 @@ docs/01-specification/        intake/（取り込み）、requirements.md、ques
 docs/02-design/               design.md
 docs/03-implementation/       test-notes.md（手動確認の補足）
 docs/04-acceptance/           results.md（結果シート。人が記入）、results.xlsx（任意）、report.md
+docs/security/                security-review-<日付>.md（/sdlc-security の報告）、scan-<日付>.md（ツールの結果）
 state/
   phase.json                  現在工程・ステップ、割り込み対応の状態
   gates/<工程>.md             人間ゲートの承認記録（成果物ハッシュ付き）

@@ -19,7 +19,7 @@ from sdlc_lib.shell import find_bash, run_shell  # noqa: E402
 from sdlc_lib.config import utf8_stdio  # noqa: E402
 
 utf8_stdio()
-from sdlc_lib.config import (PHASE_IDS, PHASES, RESULTS_FILE, ConfigError, body_dirs, find_root,  # noqa: E402
+from sdlc_lib.config import (PHASE_IDS, PHASES, RESULTS_FILE, SECURITY_DIR, ConfigError, body_dirs, find_root,  # noqa: E402
                              gated, install_mode, load_project, phase_id, phase_index, phase_name,
                              project_problems, resolve_body_file)
 
@@ -447,6 +447,33 @@ def cmd_ti_report(a):
     print("集計: " + " / ".join(f"{k} {v}" for k, v in s.items()))
 
 
+# ------------------------------------------------------------------ security
+
+def cmd_security_scan(a):
+    root, proj = ctx()
+    need_project(proj)
+    text = checks.render_security(checks.security_scan(root, proj))
+    if a.out:
+        p = Path(root, a.out)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+        print(f"{a.out} に出力しました。")
+    else:
+        print(text)
+
+
+def cmd_security_list(a):
+    root, _ = ctx()
+    d = Path(root, SECURITY_DIR)
+    reports = sorted(d.glob("security-review-*.md")) if d.is_dir() else []
+    for p in reports:
+        lines = p.read_text(encoding="utf-8").splitlines()
+        info = [ln.lstrip("- ").strip() for ln in lines if ln.startswith(("- 対象範囲", "- 対象コミット", "- 所見"))]
+        print(f"{p.relative_to(root).as_posix()}  " + " / ".join(info))
+    if not reports:
+        print(f"（{SECURITY_DIR}/ にセキュリティレビューの報告はありません。/sdlc-security で実施します）")
+
+
 # ------------------------------------------------------------------ decision / question
 
 def cmd_decision(a):
@@ -645,6 +672,13 @@ def build_parser():
     x = ti.add_parser("report", help="仕様ごとの確認状況")
     x.add_argument("--write", action="store_true", help="docs/04-acceptance/report.md に出力")
     x.set_defaults(func=cmd_ti_report)
+
+    se = sp.add_parser("security", help="随時のセキュリティレビュー（/sdlc-security）の補助").add_subparsers(
+        dest="cmd2", required=True)
+    x = se.add_parser("scan", help="project.yaml の security.tools を実行する")
+    x.add_argument("--out", help="結果を Markdown で書き出す（例: docs/security/scan-2026-10-29.md）")
+    x.set_defaults(func=cmd_security_scan)
+    se.add_parser("list", help=f"{SECURITY_DIR}/ の報告の一覧").set_defaults(func=cmd_security_list)
 
     dc = sp.add_parser("decision", help="決定事項ログ（state/decisions.md）").add_subparsers(dest="cmd2", required=True)
     x = dc.add_parser("add")

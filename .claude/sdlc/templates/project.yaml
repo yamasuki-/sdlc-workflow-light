@@ -26,3 +26,7 @@ checks:
   #   must: ["<lint コマンド>", "<型検査コマンド>"]
   #   should: ["<依存脆弱性スキャン>", "<シークレットスキャン>"]
 check_timeout_sec: 300
+# 随時のセキュリティレビュー（/sdlc-security）で実行するツール。工程の完了判定には使わない。
+# 各要素はコマンド文字列か {name, cmd}。終了コード 0 以外は「検出あり」としてレビュアーに渡す。
+security:
+  tools: []               # 例: ["pip-audit", {name: semgrep, cmd: "semgrep --config auto --error src"}, "gitleaks detect --no-banner"]

@@ -29,8 +29,8 @@ REQUIRED_GATES = ["01-specification"]
 RESULTS_FILE = "docs/04-acceptance/results.md"
 
 # ワークフロー本体を構成するスキル・エージェント（インストーラと保護判定で使う）
-SKILL_NAMES = ["sdlc", "sdlc-init", "defect", "change"] + [p["skill"] for p in PHASES]
-AGENT_NAMES = ["analyst", "implementer", "tester", "reviewer"]
+SKILL_NAMES = ["sdlc", "sdlc-init", "defect", "change", "sdlc-security"] + [p["skill"] for p in PHASES]
+AGENT_NAMES = ["analyst", "implementer", "tester", "reviewer", "security-reviewer"]
 # .claude/ からの相対パスで表した本体の配置（~/.claude/ にもプロジェクトの .claude/ にも同じ形で置く）
 BODY_DIRS = ["sdlc", "hooks/sdlc"] + [f"skills/{n}" for n in SKILL_NAMES]
 BODY_FILES = [f"agents/{n}.md" for n in AGENT_NAMES]
@@ -62,7 +62,12 @@ DEFAULT_PROJECT = {
     # 機械チェック: {"common"|<工程ID>: {"must"|"should"|"may": [コマンド or {name, cmd}]}}
     "checks": {},
     "check_timeout_sec": 300,
+    # /sdlc-security（随時のセキュリティレビュー）で実行するツール: {"tools": [コマンド or {name, cmd}]}
+    "security": {"tools": []},
 }
+
+# セキュリティレビューの報告の置き場所（どの工程の成果物でもない。いつでも書ける）
+SECURITY_DIR = "docs/security"
 
 # src_dir / test_dir に使えない（ワークフロー本体と衝突する）パス
 RESERVED_DIRS = ["docs", "input", "state", "scripts", ".claude", "examples", "rules", ".sdlc", ".git"]

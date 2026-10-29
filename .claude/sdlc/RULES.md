@@ -40,7 +40,9 @@
    またはレビュー判定が「不合格」の間は、工程を完了できない（人間ゲートも承認できない）。
 10. **決定事項・未解決事項は一元管理**: `state/decisions.md` / `state/open-questions.md` はオーケストレータ（メインセッション）だけが
     `scripts/sdlc decision|question` で追記する。サブエージェントは結果報告で返す。推測で決めず、不明点は未解決事項にする。
-11. **プロジェクト固有ルール**: `rules/common.md`・`rules/<工程ID>.md`・`rules/review-<工程ID>.md` があれば従う。
+11. **セキュリティレビューは随時**: セキュリティの専門レビューは工程に組み込まず、人が必要なときに `/sdlc-security` で実施する
+    （全体・差分・パスを対象に `docs/security/` に報告を残す。工程の状態と完了判定は変えない）。所見は人が選んで `/defect` で直す。
+12. **プロジェクト固有ルール**: `rules/common.md`・`rules/<工程ID>.md`・`rules/review-<工程ID>.md` があれば従う。
 
 ## ID 体系とトレース記法
 
@@ -68,6 +70,7 @@
 | `docs/02-design/` | 設計書 | 01 の承認後（02 にゲートを追加した場合はその承認前） |
 | `docs/03-implementation/`・`src_dir`・`test_dir` | コード・テスト・確認の補足（`test-notes.md`） | 同上 |
 | `docs/04-acceptance/` | 計画・レポート。`results.md`（結果シート）は**人だけ**が記入 | 同上 |
+| `docs/security/` | 随時のセキュリティレビューの報告（`/sdlc-security`） | いつでも |
 | `state/` | phase.json・defects・changes・decisions.md・open-questions.md（`gates/` 以外） | `scripts/sdlc` 経由で更新（票は Edit 可） |
 | `rules/` | プロジェクト固有ルール・追加のレビュー観点。雛形は `<SDLC>/templates/rules/` | 人が管理（再発防止の観点は Claude が追記） |
 | `scripts/sdlc`・`scripts/approve` | 本体へのランチャ（`scripts/sdlc init` が生成） | 不可 |
@@ -91,6 +94,8 @@ scripts/sdlc testitems import <xlsx>  # Excel に記入された結果を取り�
 scripts/sdlc testitems reset <TC...> | --item <DEF/CR>   # 再確認のため未実施に戻す
 scripts/sdlc testitems report [--write]   # 仕様ごとの確認状況
 scripts/sdlc defect new|start|close / change new|start|close
+scripts/sdlc security scan [--out <md>]  # project.yaml の security.tools を実行（/sdlc-security）
+scripts/sdlc security list          # セキュリティレビューの報告の一覧
 scripts/sdlc decision add "..." / question add|answer|list
 scripts/sdlc path <相対パス>        # 本体のファイル（<SDLC>/…）の実際のパス
 ```

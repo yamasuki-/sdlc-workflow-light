@@ -46,8 +46,8 @@ python3 install.py --user            # 何が置かれるか先に見るなら -
 ```
 ~/.claude/sdlc/            本体（bin・lib・テンプレート・チェックリスト・共通フロー・全体ルール RULES.md）
 ~/.claude/hooks/sdlc/      ガード（hooks）
-~/.claude/skills/          sdlc, sdlc-init, phase-*（4 工程）, defect, change
-~/.claude/agents/          analyst, tester, implementer, reviewer
+~/.claude/skills/          sdlc, sdlc-init, phase-*（4 工程）, defect, change, sdlc-security
+~/.claude/agents/          analyst, tester, implementer, reviewer, security-reviewer
 ```
 
 > 本家の sdlc-workflow と同じ名前（`~/.claude/sdlc/`・`/sdlc` など）を使うため、同じ場所に両方は置けません。
@@ -222,9 +222,32 @@ scripts/sdlc testitems import docs/04-acceptance/results.xlsx   # 記入した�
 |---|---|
 | 仕様どおりに動いていない | `/defect`（再現 → 原因特定 → 設計か実装からやり直し → 自動テスト追加 → 該当 TC を再確認） |
 | 仕様を変えたい・機能を足したい | `/change`（SPEC/TC の差分を作る → `scripts/approve 01` で再承認 → 差分でやり直し → 追加・変更した TC を確認） |
+| セキュリティを確認したい | `/sdlc-security`（下記） |
 | 状態を見る | `scripts/sdlc status` |
 | 未解決事項・決定事項を見る | `scripts/sdlc question list` / `scripts/sdlc decision list` |
 | コマンドの一覧 | `scripts/sdlc -h` |
+
+### セキュリティレビュー（随時）
+
+セキュリティの専門レビューは工程に組み込まれていません。必要なとき（実装の後・リリース前・定期的に）に実行します。
+工程の状態や完了判定には影響しないので、どの時点でも実行できます。
+
+```
+> /sdlc-security                    前回のレビュー以降の差分（初回は全体）を提案して実施
+> /sdlc-security all                全体
+> /sdlc-security since v1.0.0       指定したコミット・タグからの差分
+> /sdlc-security src/auth           指定したパス
+```
+
+1. `project.yaml` の `security.tools` のツールを実行します（任意。例: 依存脆弱性スキャン・SAST・シークレットスキャン）:
+   ```yaml
+   security:
+     tools: ["pip-audit", {name: semgrep, cmd: "semgrep --config auto --error src"}, "gitleaks detect --no-banner"]
+   ```
+2. security-reviewer がチェックリスト（OWASP Top 10・入力検証・秘密情報・ビジネスロジック・DoS・LLM 機能・依存・インフラ・NFR）で
+   レビューし、`docs/security/security-review-<日付>.md` に報告します（対象コミットも記録）。
+3. 所見ごとに、不具合として起票する（Critical / High は推奨）・受容する・後で対応する、を選びます。
+   起票した所見は `/defect` で直します。過去の報告は `scripts/sdlc security list` で見られます。
 
 ---
 

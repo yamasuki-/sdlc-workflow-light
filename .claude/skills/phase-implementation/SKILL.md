@@ -33,5 +33,7 @@ description: 工程03「実装」。設計に沿ってコードを書き、種�
    （組み込みの MUST: 自動テストの TC にテストコードがあること、`commands.test` の成功）。
 
 ## レビュー・完了判定
-- reviewer にチェックリスト `03-implementation.md`（セキュリティの観点を含む）を渡す。
+- reviewer にチェックリスト `03-implementation.md` を渡す（セキュリティは基本の観点だけ）。
+- セキュリティの専門レビューはこの工程では行わない。人が必要なときに `/sdlc-security` で実施する
+  （工程の完了後に「必要なら `/sdlc-security` でセキュリティレビューができます」と一言添える）。
 - 人間ゲートが無ければ `scripts/sdlc phase advance` で 04 へ進み、`/phase-acceptance` を続ける。

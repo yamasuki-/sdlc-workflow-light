@@ -642,6 +642,42 @@ class TestItems(Base):
         self.assertEqual(self.r.sdlc("phase", "advance")[0], 0)
 
 
+class TestSecurity(Base):
+    """随時のセキュリティレビュー（/sdlc-security）。工程の状態・完了判定とは独立。"""
+
+    def test_scan_tools(self):
+        self.r.write("project.yaml", PROJECT_YAML + 'security:\n  tools: ["true", {name: audit, cmd: "echo CVE-1; false"},'
+                     ' "no_such_scanner_xyz"]\n')
+        items = checks.security_scan(self.r.dir, self.r.proj)
+        self.assertEqual([i["status"] for i in items], ["OK", "検出あり・失敗", "未インストール"])
+        text = checks.render_security(items)
+        self.assertIn("CVE-1", text)
+        code, out = self.r.sdlc("security", "scan", "--out", "docs/security/scan-2026-10-29.md")
+        self.assertEqual(code, 0, out)
+        self.assertIn("| audit |", (self.r.dir / "docs/security/scan-2026-10-29.md").read_text(encoding="utf-8"))
+        self.r.write("project.yaml", PROJECT_YAML)
+        self.assertIn("未設定", checks.render_security(checks.security_scan(self.r.dir, self.r.proj)))
+
+    def test_reports_anytime_and_not_blocking(self):
+        # どの工程でも（01 の承認前でも）報告を書ける。工程の成果物・ゲートのハッシュには含まれない
+        self.assertTrue(self.r.can_write("docs/security/security-review-2026-10-29.md")[0])
+        self.assertTrue(self.r.hook("guard_bash.py", {"command": "echo x > docs/security/notes.md"}).returncode == 0)
+        self.spec()
+        self.r.write("docs/security/security-review-2026-10-29.md",
+                     "# セキュリティレビュー報告\n\n- 対象範囲: 全体\n- 対象コミット: abc\n- 所見: Critical 0 / High 1\n")
+        self.assertTrue(gates.gate_status(self.r.dir, self.r.proj, "01")["valid"])
+        self.assertIsNone(phase_of_path("docs/security/x.md", self.r.proj))
+        code, out = self.r.sdlc("security", "list")
+        self.assertEqual(code, 0)
+        self.assertIn("security-review-2026-10-29.md  対象範囲: 全体 / 対象コミット: abc / 所見: Critical 0 / High 1", out)
+        st = state.load(self.r.dir)
+        self.assertEqual(st["current_phase"], "01-specification")
+
+    def test_body_protected(self):
+        self.assertFalse(self.r.can_write(".claude/skills/sdlc-security/SKILL.md")[0])
+        self.assertFalse(self.r.can_write(".claude/agents/security-reviewer.md")[0])
+
+
 class TestRecords(Base):
     def test_decisions_and_questions(self):
         self.assertEqual(records.add_decision(self.r.dir, "言語は Python", "01-specification", "人の指示"), "DEC-001")
@@ -719,7 +755,9 @@ class TestPlacement(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
         for rel in ["sdlc/bin/sdlc", "sdlc/lib/sdlc_lib/testitems.py", "sdlc/RULES.md", "sdlc/phase-flow.md",
                     "hooks/sdlc/guard_write.py", "skills/sdlc/SKILL.md", "skills/phase-acceptance/SKILL.md",
-                    "agents/tester.md", "sdlc/templates/test-items.md", "sdlc/checklists/02-design.md"]:
+                    "agents/tester.md", "sdlc/templates/test-items.md", "sdlc/checklists/02-design.md",
+                    "skills/sdlc-security/SKILL.md", "agents/security-reviewer.md", "sdlc/checklists/security.md",
+                    "sdlc/templates/security-review.md"]:
             self.assertTrue((self.user / rel).exists(), rel)
         s = json.loads((self.user / "settings.json").read_text(encoding="utf-8"))
         self.assertEqual(s["model"], "x")

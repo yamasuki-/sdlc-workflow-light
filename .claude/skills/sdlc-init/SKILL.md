@@ -36,6 +36,8 @@ description: プロジェクト固有情報 project.yaml（言語・テストフ
    - SHOULD: 警告扱い（例: 依存脆弱性スキャン、シークレットスキャン）
    - `common` は全工程、工程 ID のブロック（例 `03-implementation`）はその工程だけに適用される。
    - 自動修正するコマンド（`--fix` / `--write`）は使わない（検査のみ）。コマンドは bash の書式で書く。
+   - 随時のセキュリティレビュー（`/sdlc-security`）で使うツール（依存脆弱性スキャン・SAST・シークレットスキャン）を
+     `security.tools` に提案する（任意。工程の完了判定には使わない）。
 6. `project.yaml` を書き、`scripts/sdlc project check` が通るまで直す。
 7. `scripts/sdlc init` を再実行する（何度実行してもよい）。
 8. プロジェクト固有ルールが要るか人に確認し、要るなら `<SDLC>/templates/rules/common.md` などを `rules/` にコピーして記入する

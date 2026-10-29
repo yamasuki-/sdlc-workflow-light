@@ -31,7 +31,7 @@ description: SDLC ワークフロー（軽量版）の最上位オーケスト�
 | `await_approval` | 下記「承認待ちの提示」を行って**停止** |
 | `blocked_upstream` | `next.message` を人に伝え、承認後の仕様変更なら `/change` で扱うことを提案して停止 |
 | `defect` / `change` / `item_close` | `next.skill`（`defect` または `change`）のスキルを `next.item` を引数に起動する |
-| `done` | `scripts/sdlc testitems report` と `scripts/sdlc trace matrix` の結果をまとめて報告して終了 |
+| `done` | `scripts/sdlc testitems report` と `scripts/sdlc trace matrix` の結果をまとめて報告して終了。`scripts/sdlc security list` で最新のコミットに対するセキュリティレビューが無ければ、`/sdlc-security` の実施を提案する |
 
 3. 人間ゲートで停止したら、このスキルも停止する。
    **自分で `scripts/approve` を実行したり、承認を仮定して先へ進んだりしない。**
@@ -42,6 +42,7 @@ description: SDLC ワークフロー（軽量版）の最上位オーケスト�
 
 人から「仕様を変えたい・機能を足したい」と言われたら `/change`、「不具合がある・動きがおかしい」と言われたら `/defect` を起動する。
 どちらか迷う場合は人に確認する（承認した仕様どおりに動いていないなら /defect、仕様そのものを変えるなら /change）。
+「セキュリティを確認したい」と言われたら `/sdlc-security` を起動する（工程の状態は変えない。いつでも実行できる）。
 
 ## 承認待ちの提示
 

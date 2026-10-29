@@ -122,6 +122,32 @@ def summary_line(res: dict) -> str:
             f"未インストール {len(res['skipped'])}）")
 
 
+def security_scan(root, proj: dict) -> list[dict]:
+    """project.yaml の security.tools（依存脆弱性・SAST・シークレットスキャン等）を実行する（/sdlc-security が使う）。
+
+    工程の完了判定には使わない。終了コード 0 以外は「検出あり」として出力をレビュアーに渡す。
+    """
+    timeout = int(proj.get("check_timeout_sec") or 300)
+    out = []
+    for e in _entries((proj.get("security") or {}).get("tools")):
+        status, rc, text = _run_cmd(root, e["cmd"], timeout)
+        out.append({"name": e["name"], "cmd": e["cmd"], "status": {"pass": "OK", "fail": "検出あり・失敗",
+                    "skipped": "未インストール"}[status], "rc": rc, "output": text})
+    return out
+
+
+def render_security(items: list[dict]) -> str:
+    if not items:
+        return ("セキュリティツールは未設定です（project.yaml の security.tools に依存脆弱性スキャン・SAST・"
+                "シークレットスキャン等を書くと実行されます）。\n")
+    lines = ["| ツール | コマンド | 結果 | 終了コード |", "|---|---|---|---|"]
+    lines += [f"| {i['name']} | `{i['cmd']}` | {i['status']} | {i['rc']} |" for i in items]
+    for i in items:
+        if i["status"] != "OK" and i["output"]:
+            lines += ["", f"### {i['name']}", "", "```", *i["output"].splitlines()[-80:], "```"]
+    return "\n".join(lines) + "\n"
+
+
 def review_verdicts(root, phase) -> list[tuple[str, str]]:
     """docs/<工程>/ の *review*.md から判定行を拾う。"""
     out = []
