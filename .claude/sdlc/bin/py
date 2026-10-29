@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# SDLC ワークフロー本体を動かす Python を探して実行する（Linux / macOS / Windows の Git Bash 共通）。
+#   bash py <スクリプト> [引数...]
+#   bash py --which            見つかった Python のコマンドを表示する
+# 環境変数 SDLC_PYTHON があればそれだけを使う（明示した指定を黙って別の Python に置き換えない）。
+# 無ければ python3 → python → py -3（Windows の Python ランチャ）の順に探す。
+# 3.10 以上で依存パッケージ（PyYAML）を import できるものを優先し、無ければ 3.10 以上のものを使う。
+# Windows の「Microsoft Store を開くだけの python3」は実際に動かして除外する。
+# 見つからない場合は終了コード 97（hooks の入口 run が「Python 無し」と「拒否」を区別するため）。
+
+export PYTHONUTF8=1             # Windows でも入出力・ファイルを UTF-8 で扱う
+export PYTHONDONTWRITEBYTECODE=1
+
+if [ -n "${SDLC_PYTHON:-}" ]; then
+  candidates=("$SDLC_PYTHON")
+else
+  candidates=("python3" "python" "py -3")
+fi
+
+found=""
+for check in 'import sys, yaml; sys.exit(0 if sys.version_info >= (3, 10) else 1)' \
+             'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; do
+  for c in "${candidates[@]}"; do
+    # shellcheck disable=SC2086
+    if $c -c "$check" >/dev/null 2>&1; then found="$c"; break 2; fi
+  done
+done
+
+if [ -z "$found" ]; then
+  [ -z "${SDLC_PY_QUIET:-}" ] && echo "[SDLC] Python 3.10 以上が見つかりません（環境変数 SDLC_PYTHON で指定できます）。" >&2
+  exit 97
+fi
+if [ "${1:-}" = "--which" ]; then
+  echo "$found"
+  exit 0
+fi
+# shellcheck disable=SC2086
+exec $found "$@"

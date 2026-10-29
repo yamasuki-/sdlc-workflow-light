@@ -1,0 +1,9 @@
+# 改行コードを OS によらずそろえる（Windows の core.autocrlf で bash スクリプトが CRLF になると動かない）
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.xlsx binary
+*.docx binary
+*.pptx binary

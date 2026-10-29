@@ -1,0 +1,7 @@
+# ワークフローの作業ファイル（TDD ガードの状態など。worktree ごとに独立）
+.sdlc/
+__pycache__/
+*.pyc
+.DS_Store
+# 個人用の Claude Code 設定（env で SDLC_MAINTENANCE を設定する場合など）。コミットしない
+.claude/settings.local.json

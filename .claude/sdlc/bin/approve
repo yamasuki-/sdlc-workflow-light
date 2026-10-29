@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""人間ゲートの承認記録スクリプト（人が端末で実行する）。
+
+  scripts/approve <工程>       例: scripts/approve 01 / scripts/approve 01-specification
+
+人間ゲートを置くのは 01（要件・仕様）と、project.yaml の gates に追加した工程だけ。
+変更要求（/change）で仕様を変えたときも、01 の再承認がそのまま変更の承認になる。
+
+自己承認を防ぐため、対話端末（TTY）からの実行でなければ拒否する。Claude Code のシェル（Bash / PowerShell ツール）は
+TTY を持たず、また環境変数 CLAUDECODE が設定されるため、そこから（新しいコンソールを開いても）実行できない。
+Windows では PowerShell / コマンドプロンプトから scripts\\approve.cmd を実行する。
+"""
+from __future__ import annotations
+
+import argparse
+import getpass
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))  # <.claude>/sdlc/lib
+
+from sdlc_lib import checks, fm, gates, items, records, state  # noqa: E402
+from sdlc_lib.config import (ConfigError, find_root, gated, load_project, phase_id,  # noqa: E402
+                             phase_name, project_problems)
+from sdlc_lib.config import utf8_stdio  # noqa: E402
+
+utf8_stdio()
+
+CHOICES = {"1": "approved", "2": "conditional", "3": "rejected"}
+
+
+def die(msg):
+    print(f"エラー: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def ask(prompt, default=None):
+    s = input(f"{prompt}{f' [{default}]' if default else ''}: ").strip()
+    return s or (default or "")
+
+
+def ask_multiline(prompt):
+    print(f"{prompt}（空行で終了）")
+    lines = []
+    while True:
+        s = input("> ")
+        if not s:
+            break
+        lines.append(s)
+    return "\n".join(lines)
+
+
+def default_approver():
+    try:
+        r = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True)
+        if r.stdout.strip():
+            return r.stdout.strip()
+    except OSError:
+        pass
+    return getpass.getuser()
+
+
+def decide(args, reject_only=False):
+    if args.decision:
+        d = {"approve": "approved", "conditional": "conditional", "reject": "rejected"}[args.decision]
+        if reject_only and d != "rejected":
+            die("承認できない状態のため、差戻し（--decision reject）のみ記録できます。")
+        return d
+    if reject_only:
+        print("\n承認できない状態のため、差戻しのみ記録できます。")
+        if ask("差戻しを記録しますか？ (yes/no)", "no").lower() not in ("y", "yes"):
+            die("中止しました。")
+        return "rejected"
+    print("\n判定: 1) 承認  2) 条件付き承認  3) 差戻し")
+    while True:
+        c = ask("番号を選択")
+        if c in CHOICES:
+            return CHOICES[c]
+
+
+def show_open_questions(root):
+    qs = records.questions(root, only_open=True)
+    if qs:
+        print(f"\n未解決事項（state/open-questions.md）: {len(qs)} 件")
+        for q in qs:
+            mark = "!" if q["priority"] == "高" else " "
+            print(f"  {mark} {q['id']} [{q['priority']}] {q['text']}")
+
+
+def history_section(old_meta, old_body):
+    """既存のゲート記録を履歴として引き継ぐ。"""
+    if not old_meta:
+        return ""
+    prev = old_body.split("\n## 履歴\n", 1)
+    older = prev[1] if len(prev) == 2 else ""
+    line = (f"- {old_meta.get('decided_at')} {gates.DECISIONS.get(old_meta.get('decision'), old_meta.get('decision'))}"
+            f"（{old_meta.get('approver')}、{old_meta.get('artifacts_hash', '')[:19]}…）")
+    if old_meta.get("invalidated_by"):
+        line += f" → {old_meta['invalidated_by']} により無効化"
+    return line + "\n" + older.strip("\n") + ("\n" if older.strip() else "")
+
+
+def write_gate(path, meta, body_main, old):
+    old_meta, old_body = old
+    hist = history_section(old_meta, old_body)
+    body = body_main + ("\n## 履歴\n\n" + hist if hist else "")
+    fm.write(path, meta, body)
+
+
+def confirm(args):
+    if args.yes:
+        return
+    if ask("この内容で記録しますか？ (yes/no)", "no").lower() not in ("y", "yes"):
+        die("中止しました。")
+
+
+def approve_phase(root, proj, args):
+    pid = phase_id(args.target)
+    if not gated(proj, pid):
+        die(f"{pid} は人間ゲートを置いていない工程です（機械チェックとレビューで完了判定します）。"
+            "人が確認したい場合は project.yaml の gates に追加してください。")
+    st = state.load(root)
+    files = gates.list_files(root)
+    bad = gates.prerequisites(root, proj, pid, files)
+    if bad:
+        die("前工程の人間ゲートが無効なため承認できません:\n" + "\n".join(f"  ✘ {s['phase']}: {s['reason']}" for s in bad))
+    h, its = gates.artifacts(root, proj, pid, files)
+    if not its:
+        die(f"{pid} の成果物がありません。")
+    print(f"=== 人間ゲート: {pid} {phase_name(pid)} ===")
+    if st["current_phase"] != pid:
+        print(f"注意: 現在工程は {st['current_phase']} です。")
+    if st.get("mode") == "item":
+        meta, _ = items.load(root, st["item"])
+        print(f"\n{items.label(st['item'])}対応中: {st['item']} {meta.get('title')}"
+              f"（{items.path(root, st['item']).relative_to(root)} の差分を確認してください）")
+    print("\n対象成果物:")
+    for it in its:
+        print(f"  {it['sha256'][:12]}  {it['path']}")
+    print(f"集約ハッシュ: {h}")
+    blockers = []
+    verdicts = checks.review_verdicts(root, pid)
+    print("\nレビュー報告:" + ("" if verdicts else " （なし）"))
+    for path, line in verdicts:
+        print(f"  {path}: {line}")
+    blockers += checks.review_failed(root, pid)
+    print("\n機械チェック（承認時に再実行）...")
+    res = checks.run(root, proj, pid)
+    print(f"  {checks.summary_line(res)}")
+    for i in res["items"]:
+        if i["status"] != "pass":
+            print(f"  [{checks.LEVEL_LABEL[i['level']]}] {i['name']}: {i['status']}")
+    if not res["must_passed"]:
+        blockers.append("機械チェックの MUST が失敗")
+    show_open_questions(root)
+    for b in blockers:
+        print(f"✘ {b}")
+
+    decision = decide(args, reject_only=bool(blockers))
+    approver = args.approver or ask("承認者", default_approver())
+    comment = args.comment if args.comment is not None else ask_multiline(
+        "条件・コメント" if decision != "rejected" else "差戻し理由・修正指示")
+    if decision == "conditional" and not comment.strip():
+        die("条件付き承認には条件の記入が必要です。")
+    gp = gates.gate_path(root, pid)
+    old = fm.read(gp) if gp.exists() else ({}, "")
+    meta = {
+        "phase": pid,
+        "decision": decision,
+        "approver": approver,
+        "decided_at": state.now(),
+        "artifacts_hash": h,
+        "artifacts": its,
+        "invalidated_by": None,
+        "item": st.get("item") if st.get("mode") == "item" else None,
+        "checks": checks.summary_line(res),
+        "blockers": blockers,
+    }
+    body = (f"\n# ゲート記録: {pid} {phase_name(pid)}\n\n"
+            f"- 工程: {pid} {phase_name(pid)}\n- 承認者: {approver}\n- 日時: {meta['decided_at']}\n"
+            f"- 判定: {gates.DECISIONS[decision]}\n- 成果物ハッシュ: {h}（{len(its)} ファイル）\n"
+            f"- 機械チェック: {meta['checks']}\n"
+            + (f"- 対応中の票: {meta['item']}\n" if meta["item"] else "")
+            + f"\n## コメント・条件\n\n{comment or '（なし）'}\n")
+    confirm(args)
+    write_gate(gp, meta, body, old)
+    if st["current_phase"] == pid:
+        st["step"] = "gate"
+        state.save(root, st)
+    print(f"\n記録しました: {gp.relative_to(root)}（{gates.DECISIONS[decision]}）")
+    print(f"監査証跡として commit してください: git add {gp.relative_to(root)} && git commit -m 'gate: {pid} {gates.DECISIONS[decision]}'")
+
+
+def main():
+    p = argparse.ArgumentParser(prog="scripts/approve", description="人間ゲートの承認記録（人が実行）")
+    p.add_argument("target", help="工程（例: 01）")
+    p.add_argument("--decision", choices=["approve", "conditional", "reject"])
+    p.add_argument("--approver")
+    p.add_argument("--comment")
+    p.add_argument("--yes", action="store_true", help="最終確認を省略（判定・承認者は引数で指定）")
+    args = p.parse_args()
+    if os.environ.get("CLAUDECODE"):
+        die("Claude Code から起動されたプロセスでは承認できません。人が自分の端末で実行してください。")
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        die("承認は人が対話端末から実行してください（TTY 以外からの実行は自己承認防止のため拒否します）。"
+            "\nWindows の Git Bash（mintty）では TTY と判定されないため、PowerShell かコマンドプロンプトで "
+            "scripts\\approve.cmd を実行してください。")
+    try:
+        root = find_root()
+        proj = load_project(root)
+        probs = project_problems(proj)
+        if probs:
+            die("project.yaml が不完全です: " + "; ".join(probs))
+        approve_phase(root, proj, args)
+    except (ConfigError, FileNotFoundError) as e:
+        die(str(e))
+    except (KeyboardInterrupt, EOFError):
+        die("中止しました。")
+
+
+if __name__ == "__main__":
+    main()

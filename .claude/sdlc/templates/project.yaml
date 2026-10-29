@@ -1,0 +1,28 @@
+# プロジェクト固有情報（ワークフロー本体は言語非依存。言語固有の情報はここだけに置く）
+workflow: sdlc            # この印で ~/.claude に置いた本体がこのプロジェクトを SDLC プロジェクトと判定する（消さない）
+language: ""              # 例: python / typescript / java / go
+test_framework: ""        # 例: pytest / vitest / junit5
+commands:
+  test: ""                # 全自動テスト（結合テスト＋最小限の単体テスト）。終了コード 0 = 全件成功
+  test_integration: ""    # 任意: 結合テストのみ
+  lint: ""                # 任意
+src_dir: ""               # 例: src
+test_dir: ""              # 例: tests（結合テスト・単体テストとも。src_dir と重ねない）
+# 人間ゲートを置く工程。01-specification（要件・仕様）は常に対象（書かなくてもよい）。
+# 設計・実装・受入確認も人が承認したい場合に追加する: 02-design / 03-implementation / 04-acceptance
+gates: [01-specification]
+parallel:
+  max_tasks: 2            # 同時に動かすサブエージェント数（Claude Pro 前提で 2）
+# 機械チェック（scripts/sdlc check）。レビューと工程の完了判定の前に実行し、MUST が失敗したら先に進めない。
+# common は全工程、工程 ID のブロックはその工程だけに適用。各要素はコマンド文字列か {name, cmd}。
+# 組み込みの MUST: トレーサビリティ（全工程）、commands.test（03・04）、結果シートの手動確認（04）。
+# 終了コード 127（コマンドが無い）は skipped（未インストール）扱い。
+checks:
+  common:
+    must: []
+    should: []            # 例: "markdownlint-cli2 'docs/**/*.md'"
+    may: []
+  # 03-implementation:
+  #   must: ["<lint コマンド>", "<型検査コマンド>"]
+  #   should: ["<依存脆弱性スキャン>", "<シークレットスキャン>"]
+check_timeout_sec: 300

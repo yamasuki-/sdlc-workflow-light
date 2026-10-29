@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# hooks の入口: bash run <hook スクリプト名>（例: bash run guard_write.py）
+# Python を探して hook を実行する。Python が見つからない場合、SDLC プロジェクトでは拒否（終了コード 2）、
+# それ以外のプロジェクトでは何もしない（~/.claude に置いた hooks が無関係なプロジェクトを止めないため）。
+src="${BASH_SOURCE[0]//\\//}"           # Windows のパス（C:\...）でも動くよう区切りを / にそろえる
+here="$(cd "${src%/*}" && pwd)"
+
+SDLC_PY_QUIET=1 bash "$here/../../sdlc/bin/py" "$here/$1"
+rc=$?
+[ "$rc" -ne 97 ] && exit "$rc"
+
+project="${CLAUDE_PROJECT_DIR:-$PWD}"
+project="${project//\\//}"
+if [ -d "$project/.claude/hooks/sdlc" ] \
+   || grep -Eq "^workflow[[:space:]]*:[[:space:]]*['\"]?sdlc" "$project/project.yaml" 2>/dev/null; then
+  echo "[SDLC ガード] Python 3.10 以上が見つからないため、安全のため拒否しました（環境変数 SDLC_PYTHON で指定できます）。" >&2
+  exit 2
+fi
+exit 0

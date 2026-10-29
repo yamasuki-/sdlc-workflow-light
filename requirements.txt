@@ -1,0 +1,6 @@
+# ワークフロー本体（hooks・scripts）の依存。プロジェクトの言語とは無関係。
+PyYAML>=6.0
+openpyxl>=3.1
+python-docx>=1.1
+python-pptx>=0.6.23
+pdfplumber>=0.11
